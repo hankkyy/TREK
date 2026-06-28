@@ -727,7 +727,12 @@ export function MapViewGL({
   // Desktop browsers only get IP-based geolocation (city-level accuracy),
   // so the button would be misleading. Mobile, where real GPS lives, keeps it.
   const isMobile = typeof window !== 'undefined' && window.innerWidth < 768
-  const buttonBottom = 'calc(var(--bottom-nav-h, 84px) + 12px)'
+  // When the day-detail panel is open it slides up over the map (bottom: navh+20,
+  // height var(--day-panel-h)) and covers the button's band, so lift the button
+  // above it; otherwise keep the plain bottom-nav offset. #1348
+  const buttonBottom = hasDayDetail
+    ? 'calc(var(--bottom-nav-h, 84px) + 20px + var(--day-panel-h, 0px) + 12px)'
+    : 'calc(var(--bottom-nav-h, 84px) + 12px)'
 
   return (
     <div className="w-full h-full relative">

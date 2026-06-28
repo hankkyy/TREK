@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react'
+import React, { useState, useEffect, useRef } from 'react'
 import ReactDOM from 'react-dom'
 import { X, Sun, Cloud, CloudRain, CloudSnow, CloudDrizzle, CloudLightning, Wind, Droplets, Sunrise, Sunset, Hotel, Calendar, MapPin, LogIn, LogOut, Hash, Pencil, Plane, Utensils, Train, Car, Ship, Ticket, FileText, Users, ChevronsDown, ChevronsUp } from 'lucide-react'
 
@@ -86,6 +86,27 @@ export default function DayDetailPanel({ day, days, places, categories = [], tri
     updateAccommodationField, handleRemoveAccommodation,
   } = useDayDetail(day, days, tripId, lat, lng, language, onAccommodationChange)
 
+  // Publish the panel's live height as a root CSS var so the map's mobile GPS
+  // button can sit just above the panel instead of being hidden behind it (#1348).
+  // The card grows/shrinks (collapse, content, ≤60vh), so track it live.
+  const cardRef = useRef<HTMLDivElement | null>(null)
+  useEffect(() => {
+    const el = cardRef.current
+    if (!el) return
+    const root = document.documentElement
+    const publish = () => root.style.setProperty('--day-panel-h', `${el.offsetHeight}px`)
+    publish()
+    let ro: ResizeObserver | undefined
+    if (typeof ResizeObserver !== 'undefined') {
+      ro = new ResizeObserver(publish)
+      ro.observe(el)
+    }
+    return () => {
+      ro?.disconnect()
+      root.style.setProperty('--day-panel-h', '0px')
+    }
+  }, [])
+
   if (!day) return null
 
   const formattedDate = day.date ? new Date(day.date + 'T00:00:00Z').toLocaleDateString(
@@ -98,7 +119,7 @@ export default function DayDetailPanel({ day, days, places, categories = [], tri
 
   return (
     <div className="fixed z-50" style={{ bottom: 'calc(var(--bottom-nav-h) + 20px)', left: `calc(${leftWidth}px + (100vw - ${leftWidth}px - ${rightWidth}px) / 2)`, transform: 'translateX(-50%)', width: `min(800px, calc(100vw - ${leftWidth}px - ${rightWidth}px - 32px))`, ...(mobile ? { zIndex: 10000 } : null), ...font }}>
-      <div className="bg-surface-elevated" style={{
+      <div ref={cardRef} className="bg-surface-elevated" style={{
         backdropFilter: 'blur(40px) saturate(180%)',
         WebkitBackdropFilter: 'blur(40px) saturate(180%)',
         borderRadius: 20,

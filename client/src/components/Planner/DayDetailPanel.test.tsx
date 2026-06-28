@@ -51,6 +51,16 @@ describe('DayDetailPanel', () => {
     expect(document.body).toBeInTheDocument();
   });
 
+  it('FE-PLANNER-DAYDETAIL-063: publishes its height to --day-panel-h and resets it on unmount (#1348)', () => {
+    document.documentElement.style.removeProperty('--day-panel-h');
+    const { unmount } = render(<DayDetailPanel {...defaultProps} />);
+    // The panel publishes its measured height so the map's mobile GPS button can
+    // sit above it instead of being hidden behind it.
+    expect(document.documentElement.style.getPropertyValue('--day-panel-h')).not.toBe('');
+    unmount();
+    expect(document.documentElement.style.getPropertyValue('--day-panel-h')).toBe('0px');
+  });
+
   it('FE-PLANNER-DAYDETAIL-002: returns null when day prop is null', () => {
     render(<DayDetailPanel {...defaultProps} day={null as any} />);
     expect(document.querySelector('[style*="position: fixed"]')).toBeNull();
