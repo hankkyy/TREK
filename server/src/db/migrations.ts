@@ -3054,6 +3054,23 @@ function runMigrations(db: Database.Database): void {
         if (!err.message?.includes('duplicate column name')) throw err;
       }
     },
+    // Store Google Maps feature IDs separately from real Google Places API IDs.
+    () => {
+      try {
+        db.exec('ALTER TABLE places ADD COLUMN google_ftid TEXT');
+      } catch (err: any) {
+        if (!err.message?.includes('duplicate column name')) throw err;
+      }
+    },
+    // Remember the app version a notice was dismissed at, so per-version recurring
+    // notices (e.g. the thank-you) re-appear on the next install/upgrade.
+    () => {
+      try {
+        db.exec('ALTER TABLE user_notice_dismissals ADD COLUMN dismissed_app_version TEXT');
+      } catch (err: any) {
+        if (!err.message?.includes('duplicate column name')) throw err;
+      }
+    },
   ];
 
   if (currentVersion < migrations.length) {

@@ -5,7 +5,7 @@ import { Trip, User } from '../types';
 import { listDays, listAccommodations } from './dayService';
 import { listBudgetItems } from './budgetService';
 import { listItems as listPackingItems } from './packingService';
-import { listReservations, loadEndpointsByTrip } from './reservationService';
+import { listReservations, loadEndpointsByTrip, resyncReservationDays } from './reservationService';
 import { listNotes as listCollabNotes } from './collabService';
 import { shiftOwnerEntriesForTripWindow } from './vacayService';
 
@@ -256,8 +256,12 @@ export function updateTrip(tripId: string | number, userId: number, data: Update
     shiftOwnerEntriesForTripWindow(trip.user_id, trip.start_date, trip.end_date, newStart);
 
   const dayCount = data.day_count ? Math.min(Math.max(Number(data.day_count) || 7, 1), MAX_TRIP_DAYS) : undefined;
-  if (newStart !== trip.start_date || newEnd !== trip.end_date || dayCount)
+  if (newStart !== trip.start_date || newEnd !== trip.end_date || dayCount) {
     generateDays(tripId, newStart || null, newEnd || null, undefined, dayCount);
+    // generateDays re-dates day rows positionally; re-anchor dated bookings to the day
+    // matching their absolute reservation_time so they don't shift with it (#1288).
+    resyncReservationDays(tripId);
+  }
 
   const changes: Record<string, unknown> = {};
   if (title && title !== trip.title) changes.title = title;
@@ -632,14 +636,14 @@ export function copyTripById(sourceTripId: string | number, newOwnerId: number, 
     const insertPlace = db.prepare(`
       INSERT INTO places (trip_id, name, description, lat, lng, address, category_id, price, currency,
         reservation_status, reservation_notes, reservation_datetime, place_time, end_time,
-        duration_minutes, notes, image_url, google_place_id, website, phone, transport_mode, osm_id)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        duration_minutes, notes, image_url, google_place_id, google_ftid, website, phone, transport_mode, osm_id)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `);
     for (const p of oldPlaces) {
       const r = insertPlace.run(newTripId, p.name, p.description, p.lat, p.lng, p.address, p.category_id,
         p.price, p.currency, p.reservation_status, p.reservation_notes, p.reservation_datetime,
         p.place_time, p.end_time, p.duration_minutes, p.notes, p.image_url, p.google_place_id,
-        p.website, p.phone, p.transport_mode, p.osm_id);
+        p.google_ftid, p.website, p.phone, p.transport_mode, p.osm_id);
       placeMap.set(p.id, r.lastInsertRowid);
     }
 

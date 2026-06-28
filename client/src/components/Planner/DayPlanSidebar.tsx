@@ -35,6 +35,7 @@ import { DayPlanSidebarTimeConfirmModal } from './DayPlanSidebarTimeConfirmModal
 import { DayPlanSidebarTransportDetailModal } from './DayPlanSidebarTransportDetailModal'
 import { DayPlanSidebarFooter } from './DayPlanSidebarFooter'
 import type { Trip, Day, Place, Category, Assignment, Accommodation, Reservation, AssignmentsMap, RouteResult, RouteSegment, DayNote } from '../../types'
+import { getGoogleMapsUrlForPlace } from './placeGoogleMaps'
 
 interface DayPlanSidebarProps {
   tripId: number
@@ -154,6 +155,9 @@ function useDayPlanSidebar(props: DayPlanSidebarProps) {
   const [routeLegs, setRouteLegs] = useState<Record<number, RouteSegment>>({})
   const [hotelLegs, setHotelLegs] = useState<{ top?: { seg: RouteSegment; name: string }; bottom?: { seg: RouteSegment; name: string } }>({})
   const optimizeFromAccommodation = useSettingsStore(s => s.settings.optimize_from_accommodation)
+  // Recompute the hotel/route legs when the user flips km↔mi so the connector
+  // distances refresh instead of showing stale cached text (#1300).
+  const distanceUnit = useSettingsStore(s => s.settings.distance_unit)
   const legsAbortRef = useRef<AbortController | null>(null)
   const [draggingId, setDraggingId] = useState(null)
   const [lockedIds, setLockedIds] = useState(new Set())
@@ -411,25 +415,30 @@ function useDayPlanSidebar(props: DayPlanSidebarProps) {
     // waypoint of the day (morning) and from the last one back to it (evening). Only when
     // the "optimize from accommodation" setting is on and the day has a hotel.
     const day = days.find(d => d.id === selectedDayId)
-    const { morning: startHotel, evening: endHotel } =
-      day && optimizeFromAccommodation !== false ? getDayBookendHotels(day, days, accommodations) : {}
+    const bookends = day && optimizeFromAccommodation !== false
+      ? getDayBookendHotels(day, days, accommodations)
+      : null
+    const startHotel = bookends?.morning
+    const endHotel = bookends?.evening
     const hotelName = (a: Accommodation) => (a as any).place_name || (a as any).reservation_title || ''
     // Waypoints include transport endpoints (a car return, a taxi/train arrival), so the hotel
-    // legs connect even when the day starts or ends with a booking rather than a place.
-    const wayPts: { lat: number; lng: number }[] = []
+    // legs connect even when the day starts or ends with a booking rather than a place. Track
+    // whether each is a place so we can skip a hotel↔transport leg that isn't real: on a day-1
+    // arrival the check-in hotel never drove to the departure airport (#1321).
+    const wayPts: { lat: number; lng: number; isPlace: boolean }[] = []
     for (const it of merged) {
       if (it.type === 'place' && it.data.place?.lat && it.data.place?.lng) {
-        wayPts.push({ lat: it.data.place.lat, lng: it.data.place.lng })
+        wayPts.push({ lat: it.data.place.lat, lng: it.data.place.lng, isPlace: true })
       } else if (it.type === 'transport') {
         const { from, to } = getTransportRouteEndpoints(it.data, selectedDayId)
-        if (from) wayPts.push({ lat: from.lat, lng: from.lng })
-        if (to) wayPts.push({ lat: to.lat, lng: to.lng })
+        if (from) wayPts.push({ lat: from.lat, lng: from.lng, isPlace: false })
+        if (to) wayPts.push({ lat: to.lat, lng: to.lng, isPlace: false })
       }
     }
     const firstWay = wayPts[0]
     const lastWay = wayPts[wayPts.length - 1]
-    const wantTop = !!(startHotel && firstWay)
-    const wantBottom = !!(endHotel && lastWay)
+    const wantTop = !!(startHotel && firstWay && (firstWay.isPlace || bookends?.morningIsSleptHere))
+    const wantBottom = !!(endHotel && lastWay && (lastWay.isPlace || bookends?.eveningIsOvernight))
 
     if (runs.length === 0 && !wantTop && !wantBottom) { setRouteLegs({}); setHotelLegs({}); return }
 
@@ -465,7 +474,7 @@ function useDayPlanSidebar(props: DayPlanSidebarProps) {
 
       if (!controller.signal.aborted) { setRouteLegs(map); setHotelLegs(hotel) }
     })()
-  }, [selectedDayId, routeShown, routeProfile, mergedItemsMap, accommodations, days, optimizeFromAccommodation])
+  }, [selectedDayId, routeShown, routeProfile, mergedItemsMap, accommodations, days, optimizeFromAccommodation, distanceUnit])
 
   const openAddNote = (dayId, e) => {
     e?.stopPropagation()
@@ -1046,6 +1055,9 @@ function useDayPlanSidebar(props: DayPlanSidebarProps) {
 
 const DayPlanSidebar = React.memo(function DayPlanSidebar(props: DayPlanSidebarProps) {
   const S = useDayPlanSidebar(props)
+  // Needed by the route-tools visibility gate in the render below (#1330); the hook
+  // keeps its own copy, so read it reactively here in the component scope too.
+  const optimizeFromAccommodation = useSettingsStore(s => s.settings.optimize_from_accommodation)
   const {
     tripId,
     trip,
@@ -1231,6 +1243,16 @@ const DayPlanSidebar = React.memo(function DayPlanSidebar(props: DayPlanSidebarP
           const cost = dayTotalCost(day.id, assignments, currency)
           const formattedDate = formatDate(day.date, locale)
           const loc = da.find(a => a.place?.lat && a.place?.lng)
+          // Route tools normally need 2+ stops, but a single located place is still
+          // routable when accommodation optimization can bookend it with a hotel
+          // (hotel → place → hotel, the same line the map draws) — otherwise the tools
+          // vanish on such a day (#1330). Purely additive to the 2+ case.
+          const routeBookends = optimizeFromAccommodation !== false ? getDayBookendHotels(day, days, accommodations) : null
+          const hasRouteBookend = !!(
+            (routeBookends?.morning?.place_lat != null && routeBookends?.morning?.place_lng != null) ||
+            (routeBookends?.evening?.place_lat != null && routeBookends?.evening?.place_lng != null)
+          )
+          const routeToolsRoutable = da.length >= 2 || (loc != null && hasRouteBookend)
           const isDragTarget = dragOverDayId === day.id
           const merged = mergedItemsMap[day.id] || []
           const dayNoteUi = noteUi[day.id]
@@ -1595,14 +1617,17 @@ const DayPlanSidebar = React.memo(function DayPlanSidebar(props: DayPlanSidebarP
                             }}
                             onDragEnd={() => { setDraggingId(null); setDragOverDayId(null); setDropTargetKey(null); dragDataRef.current = null }}
                             onClick={() => { onPlaceClick(isPlaceSelected ? null : place.id, isPlaceSelected ? null : assignment.id); if (!isPlaceSelected) onSelectDay(day.id, true) }}
-                            onContextMenu={e => ctxMenu.open(e, [
-                              canEditDays && onEditPlace && { label: t('common.edit'), icon: Pencil, onClick: () => onEditPlace(place, assignment.id) },
-                              canEditDays && onRemoveAssignment && { label: t('planner.removeFromDay'), icon: Trash2, onClick: () => onRemoveAssignment(day.id, assignment.id) },
-                              place.website && { label: t('inspector.website'), icon: ExternalLink, onClick: () => window.open(place.website, '_blank') },
-                              (place.lat && place.lng) && { label: 'Google Maps', icon: Navigation, onClick: () => window.open(`https://www.google.com/maps/search/?api=1&query=${place.google_place_id ? encodeURIComponent(place.name) + '&query_place_id=' + place.google_place_id : place.lat + ',' + place.lng}`, '_blank') },
-                              { divider: true },
-                              canEditDays && onDeletePlace && { label: t('common.delete'), icon: Trash2, danger: true, onClick: () => onDeletePlace(place.id) },
-                            ])}
+                            onContextMenu={e => {
+                              const googleMapsUrl = getGoogleMapsUrlForPlace(place)
+                              ctxMenu.open(e, [
+                                canEditDays && onEditPlace && { label: t('common.edit'), icon: Pencil, onClick: () => onEditPlace(place, assignment.id) },
+                                canEditDays && onRemoveAssignment && { label: t('planner.removeFromDay'), icon: Trash2, onClick: () => onRemoveAssignment(day.id, assignment.id) },
+                                place.website && { label: t('inspector.website'), icon: ExternalLink, onClick: () => window.open(place.website, '_blank') },
+                                googleMapsUrl && { label: 'Google Maps', icon: Navigation, onClick: () => window.open(googleMapsUrl, '_blank') },
+                                { divider: true },
+                                canEditDays && onDeletePlace && { label: t('common.delete'), icon: Trash2, danger: true, onClick: () => onDeletePlace(place.id) },
+                              ])
+                            }}
                             onMouseEnter={e => {
                               if (!isPlaceSelected && !lockedIds.has(assignment.id))
                                 e.currentTarget.style.background = 'var(--bg-hover)'
@@ -2151,8 +2176,8 @@ const DayPlanSidebar = React.memo(function DayPlanSidebar(props: DayPlanSidebarP
                     )}
                   </div>
 
-                  {/* Routen-Werkzeuge (ausgewählter Tag, 2+ Orte) */}
-                  {(isSelected || (showRouteToolsWhenExpanded && isExpanded)) && getDayAssignments(day.id).length >= 2 && (
+                  {/* Routen-Werkzeuge (ausgewählter Tag, 2+ Orte — oder 1 Ort mit Hotel-Bookend, #1330) */}
+                  {(isSelected || (showRouteToolsWhenExpanded && isExpanded)) && routeToolsRoutable && (
                     <div style={{ padding: '10px 16px 12px', borderTop: '1px solid var(--border-faint)', display: 'flex', flexDirection: 'column', gap: 7 }}>
                       <div style={{ display: 'flex', gap: 6, alignItems: 'stretch' }}>
                         <button

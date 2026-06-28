@@ -45,6 +45,7 @@ interface GooglePlaceResult {
   websiteUri?: string;
   nationalPhoneNumber?: string;
   types?: string[];
+  googleMapsUri?: string;
 }
 
 interface GoogleAutocompleteSuggestion {
@@ -60,7 +61,6 @@ interface GoogleAutocompleteSuggestion {
 interface GooglePlaceDetails extends GooglePlaceResult {
   userRatingCount?: number;
   regularOpeningHours?: { weekdayDescriptions?: string[]; openNow?: boolean };
-  googleMapsUri?: string;
   editorialSummary?: { text: string };
   reviews?: { authorAttribution?: { displayName?: string; photoUri?: string }; rating?: number; text?: { text?: string }; relativePublishTimeDescription?: string }[];
   photos?: { name: string; authorAttributions?: { displayName?: string }[] }[];
@@ -68,7 +68,17 @@ interface GooglePlaceDetails extends GooglePlaceResult {
 
 // ── Constants ────────────────────────────────────────────────────────────────
 
-const UA = 'TREK Travel Planner (https://github.com/mauriceboe/TREK)';
+// Overpass, Nominatim and Wikimedia all ask that requests carry a User-Agent that
+// uniquely identifies the deploying instance — a shared, generic UA gets rate-limited
+// and throttled harder (see #1309). When the instance URL is configured we append it;
+// getAppUrl()'s bare http://localhost fallback isn't a useful identifier, so we drop it.
+export function buildUserAgent(instanceUrl: string | undefined): string {
+  const base = 'TREK Travel Planner (https://github.com/mauriceboe/TREK)';
+  if (instanceUrl && !instanceUrl.startsWith('http://localhost')) return `${base}; ${instanceUrl}`;
+  return base;
+}
+// Computed once at load — getAppUrl() reads only env vars, which don't change at runtime.
+const UA = buildUserAgent(getAppUrl());
 
 // TREK's internal language codes mostly coincide with valid BCP-47 codes, but a
 // couple don't: 'br' is Brazilian Portuguese here (BCP-47 'pt-BR'; bare 'br' is
@@ -86,6 +96,23 @@ function toApiLang(lang: string | undefined, fallback = 'en'): string {
   const code = (lang || '').trim();
   if (!code) return fallback;
   return API_LANG_OVERRIDES[code] ?? code;
+}
+
+const GOOGLE_FTID_RE = /^0x[0-9a-f]+:0x[0-9a-f]+$/i;
+
+// Extracts a Google Maps feature id (ftid, 0x..:0x..) from a URL's ?ftid= param.
+// The Places API (New) googleMapsUri is usually a cid-style URL (https://maps.google.com/?cid=NNN)
+// with no ftid, so this returns null for most API responses — the precise query_place_id link is
+// used instead. It does recover an ftid from a /place/?...&ftid= URL, e.g. a pasted share link
+// resolved by resolveGoogleMapsUrl or a Google MyMaps list import.
+export function googleFtidFromMapsUrl(url?: string | null): string | null {
+  if (!url) return null;
+  try {
+    const ftid = new URL(url).searchParams.get('ftid')?.trim();
+    return ftid && GOOGLE_FTID_RE.test(ftid) ? ftid.toLowerCase() : null;
+  } catch {
+    return null;
+  }
 }
 
 // ── Photo cache (disk-backed) ────────────────────────────────────────────────
@@ -145,6 +172,7 @@ export async function searchNominatim(query: string, lang?: string) {
   const data = await response.json() as NominatimResult[];
   return data.map(item => ({
     google_place_id: null,
+    google_ftid: null,
     osm_id: `${item.osm_type}:${item.osm_id}`,
     name: item.name || item.display_name?.split(',')[0] || '',
     address: item.display_name || '',
@@ -264,15 +292,39 @@ interface PoiSearchResult {
 // frequently overloaded (504s) and some community mirrors are unreachable from
 // certain networks. Racing them means whichever mirror is fastest-reachable for
 // this user answers, and an overloaded or blocked one never blocks the others.
-const OVERPASS_MIRRORS = [
+const DEFAULT_OVERPASS_MIRRORS = [
   'https://overpass-api.de/api/interpreter',
   'https://maps.mail.ru/osm/tools/overpass/api/interpreter',
   'https://overpass.kumi.systems/api/interpreter',
   'https://overpass.private.coffee/api/interpreter',
 ];
-// Per-mirror cap. Because mirrors race in parallel this is also the worst-case
-// total wait before every mirror is given up on and a 502 is returned.
-const OVERPASS_TIMEOUT_MS = 12000;
+
+// Operators behind locked-down egress — or running their own Overpass — can point TREK
+// at one or more custom endpoints via OVERPASS_URL (comma-separated). When set it
+// REPLACES the public mirrors, so a firewalled cluster never reaches out to them and a
+// self-hosted instance is used exclusively (see #1309). Non-http(s) entries are dropped.
+export function resolveOverpassEndpoints(raw: string | undefined = process.env.OVERPASS_URL): string[] {
+  const custom = (raw ?? '')
+    .split(',')
+    .map(s => s.trim())
+    .filter(s => {
+      try { const u = new URL(s); return u.protocol === 'http:' || u.protocol === 'https:'; }
+      catch { return false; }
+    });
+  return custom.length ? custom : DEFAULT_OVERPASS_MIRRORS;
+}
+const OVERPASS_MIRRORS = resolveOverpassEndpoints();
+// Per-mirror fetch cap. Because mirrors race in parallel this is also the worst-case
+// wait before every mirror is given up on and a 502 is returned. Public mirrors answer
+// in 1–2s when reachable, so the cap mainly bounds dead/blocked ones; operators with a
+// slow self-hosted endpoint can raise it via OVERPASS_TIMEOUT_MS. A non-positive or
+// non-numeric value falls back to the default — a 0/negative cap would abort every
+// request immediately and 502 the search.
+export function resolveOverpassTimeoutMs(raw: string | undefined = process.env.OVERPASS_TIMEOUT_MS): number {
+  const n = Number(raw);
+  return Number.isFinite(n) && n > 0 ? n : 12000;
+}
+const OVERPASS_TIMEOUT_MS = resolveOverpassTimeoutMs();
 // Largest viewport side we send to Overpass. A country/continent-sized bbox makes
 // Overpass scan millions of elements and time out; clamping to a centred window
 // keeps the query cheap so the explore pill returns fast at ANY zoom level.
@@ -324,8 +376,15 @@ async function overpassFetch(query: string): Promise<OverpassPoiElement[]> {
     // Promise.any resolves with the first mirror to return valid JSON, and only
     // rejects (AggregateError) once every mirror has failed.
     return await Promise.any(OVERPASS_MIRRORS.map(attempt));
-  } catch {
-    throw Object.assign(new Error('Overpass request failed'), { status: 502 });
+  } catch (err) {
+    // Log WHY every endpoint failed (connection refused, aborted/timed out, non-OSM
+    // body, …) so an operator can tell blocked egress / a firewall from a transiently
+    // overloaded mirror — otherwise this is a bare 502 with no breadcrumb (see #1309).
+    const reasons = err instanceof AggregateError
+      ? err.errors.map(e => (e instanceof Error ? e.message : String(e))).join(' | ')
+      : (err instanceof Error ? err.message : String(err));
+    console.error(`[Overpass] all ${OVERPASS_MIRRORS.length} endpoint(s) failed — ${reasons}`);
+    throw Object.assign(new Error('Could not reach any Overpass endpoint'), { status: 502 });
   } finally {
     // Cancel the slower/losing requests — we already have (or have given up on) a result.
     controllers.forEach(c => { try { c.abort(); } catch { /* noop */ } });
@@ -573,7 +632,7 @@ export async function searchPlaces(userId: number, query: string, lang?: string,
     headers: {
       'Content-Type': 'application/json',
       'X-Goog-Api-Key': apiKey,
-      'X-Goog-FieldMask': 'places.id,places.displayName,places.formattedAddress,places.location,places.rating,places.websiteUri,places.nationalPhoneNumber,places.types',
+      'X-Goog-FieldMask': 'places.id,places.displayName,places.formattedAddress,places.location,places.rating,places.websiteUri,places.nationalPhoneNumber,places.types,places.googleMapsUri',
     },
     body: JSON.stringify(searchBody),
   });
@@ -588,6 +647,7 @@ export async function searchPlaces(userId: number, query: string, lang?: string,
 
   const places = (data.places || []).map((p: GooglePlaceResult) => ({
     google_place_id: p.id,
+    google_ftid: googleFtidFromMapsUrl(p.googleMapsUri),
     name: p.displayName?.text || '',
     address: p.formattedAddress || '',
     lat: p.location?.latitude || null,
@@ -740,6 +800,7 @@ export async function getPlaceDetails(userId: number, placeId: string, lang?: st
 
   const place = {
     google_place_id: data.id,
+    google_ftid: googleFtidFromMapsUrl(data.googleMapsUri),
     name: data.displayName?.text || '',
     address: data.formattedAddress || '',
     lat: data.location?.latitude || null,
@@ -799,6 +860,7 @@ export async function getPlaceDetailsExpanded(userId: number, placeId: string, l
 
   const place = {
     google_place_id: data.id,
+    google_ftid: googleFtidFromMapsUrl(data.googleMapsUri),
     name: data.displayName?.text || '',
     address: data.formattedAddress || '',
     lat: data.location?.latitude || null,
@@ -983,7 +1045,7 @@ export async function reverseGeocode(lat: string, lng: string, lang?: string): P
 
 // ── Resolve Google Maps URL ──────────────────────────────────────────────────
 
-export async function resolveGoogleMapsUrl(url: string): Promise<{ lat: number; lng: number; name: string | null; address: string | null }> {
+export async function resolveGoogleMapsUrl(url: string): Promise<{ lat: number; lng: number; name: string | null; address: string | null; google_ftid: string | null }> {
   let resolvedUrl = url;
 
   // Extract coordinates from a string (URL or page body). Google Maps encodes
@@ -1064,5 +1126,5 @@ export async function resolveGoogleMapsUrl(url: string): Promise<{ lat: number; 
   const name = placeName || nominatim.name || nominatim.address?.tourism || nominatim.address?.building || null;
   const address = nominatim.display_name || null;
 
-  return { lat, lng, name, address };
+  return { lat, lng, name, address, google_ftid: googleFtidFromMapsUrl(resolvedUrl) };
 }

@@ -416,6 +416,15 @@ describe('importGoogleList', () => {
     expect(result.status).toBe(400);
   });
 
+  it('PLACE-SVC-026b — a single-place link gives a guiding error instead of the generic one (#1304)', async () => {
+    const { user } = createUser(testDb);
+    const trip = createTrip(testDb, user.id);
+    const url = 'https://www.google.com/maps/place/Eiffel+Tower/@48.8584,2.2945,17z/data=!3m1';
+    const result = await importGoogleList(String(trip.id), url) as any;
+    expect(result.status).toBe(400);
+    expect(result.error).toMatch(/single place/i);
+  });
+
   it('PLACE-SVC-027 — returns error when Google Maps API responds with non-ok status', async () => {
     const { user } = createUser(testDb);
     const trip = createTrip(testDb, user.id);
@@ -447,6 +456,57 @@ describe('importGoogleList', () => {
     expect(result.places).toHaveLength(2);
     expect(result.places[0].name).toBe('Paris');
     expect(result.places[1].name).toBe('London');
+  });
+
+  it('PLACE-SVC-028b — stores a Google Maps ftid separately from google_place_id', async () => {
+    const { user } = createUser(testDb);
+    const trip = createTrip(testDb, user.id);
+
+    const listPayload = [
+      [null, null, null, null, 'My Test List', null, null, null, [
+        [null, [null, null, null, null, '878 Weber St N', [null, null, 43.5118527, -80.5542617], ['-8634542354666695567', '-8822026229683971437']], "St. Jacobs Farmers' Market"],
+      ]],
+    ];
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue({
+      ok: true,
+      text: async () => 'prefix\n' + JSON.stringify(listPayload),
+    }));
+
+    const url = 'https://www.google.com/maps/placelists/list/ABC123DEF456';
+    const result = await importGoogleList(String(trip.id), url) as any;
+
+    expect(result.places).toHaveLength(1);
+    expect(result.places[0].google_place_id).toBeNull();
+    expect(result.places[0].google_ftid).toBe('0x882bf179e806d471:0x8591dde29c821a93');
+  });
+
+  it('PLACE-SVC-028c — backfills google_ftid when re-import skips a duplicate', async () => {
+    const { user } = createUser(testDb);
+    const trip = createTrip(testDb, user.id);
+    const existing = createPlace(testDb, trip.id, {
+      name: "St. Jacobs Farmers' Market",
+      lat: 43.5118527,
+      lng: -80.5542617,
+    }) as any;
+
+    const listPayload = [
+      [null, null, null, null, 'My Test List', null, null, null, [
+        [null, [null, null, null, null, '878 Weber St N', [null, null, 43.5118527, -80.5542617], ['-8634542354666695567', '-8822026229683971437']], "St. Jacobs Farmers' Market"],
+      ]],
+    ];
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue({
+      ok: true,
+      text: async () => 'prefix\n' + JSON.stringify(listPayload),
+    }));
+
+    const url = 'https://www.google.com/maps/placelists/list/ABC123DEF456';
+    const result = await importGoogleList(String(trip.id), url) as any;
+    const row = testDb.prepare('SELECT google_place_id, google_ftid FROM places WHERE id = ?').get(existing.id) as any;
+
+    expect(result.places).toHaveLength(0);
+    expect(result.skipped).toBe(1);
+    expect(row.google_place_id).toBeNull();
+    expect(row.google_ftid).toBe('0x882bf179e806d471:0x8591dde29c821a93');
   });
 
   it('PLACE-SVC-029 — returns error when list items array is empty', async () => {
