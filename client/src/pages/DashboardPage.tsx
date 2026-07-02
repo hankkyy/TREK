@@ -609,7 +609,12 @@ function TimezoneTool({ locale }: { locale: string }): React.ReactElement {
 
   const allZones = React.useMemo<string[]>(() => {
     const supported = (Intl as unknown as { supportedValuesOf?: (k: string) => string[] }).supportedValuesOf
-    try { return supported ? supported('timeZone') : FALLBACK_ZONES } catch { return FALLBACK_ZONES }
+    try {
+      const zones = supported ? supported('timeZone') : FALLBACK_ZONES
+      // Always merge FALLBACK_ZONES so critical timezones like Asia/Ho_Chi_Minh
+      // are available even when the browser's Intl list doesn't include them.
+      return [...new Set([...zones, ...FALLBACK_ZONES])]
+    } catch { return FALLBACK_ZONES }
   }, [])
 
   const tzOptions = allZones
