@@ -422,7 +422,7 @@ export async function getStats(userId: number) {
   // This is more reliable than address parsing, which breaks for domestic
   // trips where the country name is absent and districts get miscounted.
   const cityClusters: { lat: number; lng: number }[] = [];
-  const CITY_RADIUS_KM = 15;
+  const CITY_RADIUS_KM = 40;
 
   for (const place of places) {
     if (place.lat == null || place.lng == null) continue;
