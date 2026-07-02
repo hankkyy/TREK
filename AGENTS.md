@@ -26,8 +26,10 @@ curl -sI https://hanktrip.com  # HTTP 200
 |---|-----|------|--------|
 | 1 | 地点描述和备注重复 | `client/.../PlaceInspector.tsx` | `303e9d5` |
 | 2 | Dashboard"已计划"空 | `client/.../useDashboard.ts` | `303e9d5` |
-| 3 | Admin 地图预览不可拖 | `client/.../DefaultUserSettingsTab.tsx` | `25a3daa` |
+| 3 | Admin 地图预览增强 | `client/.../DefaultUserSettingsTab.tsx` + `MapView.tsx` | `25a3daa`, `eff9581`, `最新` |
 | 4 | Atlas 城市数错误 | `server/.../atlasService.ts` | `4bf3688` |
+| 5 | 待办列表默认优先级排序 | `client/.../useTodoList.ts` | `f92be06` |
+| 6 | 版本号 vdev→3.1.4 | Dockerfile build-arg | 构建参数 |
 
 ## 部署方式
 

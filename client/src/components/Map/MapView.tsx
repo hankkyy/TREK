@@ -409,6 +409,7 @@ export const MapView = memo(function MapView({
   pois = [] as Poi[],
   onPoiClick,
   onViewportChange,
+  scrollWheelZoom = true,
 }: any) {
   const poiMarkers = useMemo(() => (pois as Poi[]).map((poi: Poi) => (
     <Marker
@@ -579,6 +580,7 @@ export const MapView = memo(function MapView({
       center={center}
       zoom={zoom}
       zoomControl={false}
+      scrollWheelZoom={scrollWheelZoom}
       className="w-full h-full bg-[#e5e7eb]"
     >
       <TileLayer

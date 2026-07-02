@@ -168,8 +168,8 @@ export default function DefaultUserSettingsTab(): React.ReactElement {
     name: 'Preview center',
     description: null,
     notes: null,
-    lat: 48.8566,
-    lng: 2.3522,
+    lat: previewCenter[0],
+    lng: previewCenter[1],
     address: null,
     category_id: null,
     price: null,
@@ -185,7 +185,7 @@ export default function DefaultUserSettingsTab(): React.ReactElement {
     website: null,
     phone: null,
     created_at: Date(),
-  }], [])
+  }], [previewCenter])
 
   if (!loaded) {
     return <p className="text-content-faint" style={{ fontSize: 12, fontStyle: 'italic', padding: 16 }}>Loading…</p>
@@ -358,6 +358,7 @@ export default function DefaultUserSettingsTab(): React.ReactElement {
             leftWidth: 0,
             rightWidth: 0,
             hasInspector: false,
+            scrollWheelZoom: false,
           })}
         </div>
         <div style={{ display: 'flex', gap: 8, marginTop: 8, alignItems: 'center' }}>
