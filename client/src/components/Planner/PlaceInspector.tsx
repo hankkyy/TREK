@@ -267,7 +267,7 @@ export default function PlaceInspector({
           )}
 
           {/* Notes */}
-          {place.notes && (
+          {place.notes && place.notes.trim() !== (place.description || '').trim() && (
             <div className="collab-note-md bg-surface-hover text-content-muted" style={{ borderRadius: 10, overflow: 'hidden', flexShrink: 0, fontSize: 12, lineHeight: '1.5', padding: '8px 12px', wordBreak: 'break-word', overflowWrap: 'anywhere' }}>
               <Markdown remarkPlugins={[remarkGfm, remarkBreaks]}>{place.notes}</Markdown>
             </div>

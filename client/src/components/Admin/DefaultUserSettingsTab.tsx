@@ -109,6 +109,8 @@ export default function DefaultUserSettingsTab(): React.ReactElement {
   const [mapTileUrl, setMapTileUrl] = useState('')
   const [mapboxToken, setMapboxToken] = useState('')
   const [mapboxStyle, setMapboxStyle] = useState('')
+  const [previewCenter, setPreviewCenter] = useState<[number, number]>([48.8566, 2.3522])
+  const [previewZoom, setPreviewZoom] = useState(10)
 
   useEffect(() => {
     adminApi.getDefaultUserSettings().then((data: Defaults) => {
@@ -343,8 +345,11 @@ export default function DefaultUserSettingsTab(): React.ReactElement {
             onMarkerClick: null,
             onMapClick: null,
             onMapContextMenu: null,
-            center: [48.8566, 2.3522],
-            zoom: 10,
+            center: previewCenter,
+            zoom: previewZoom,
+            onViewportChange: (bbox: { south: number; west: number; north: number; east: number }) => {
+              setPreviewCenter([(bbox.north + bbox.south) / 2, (bbox.east + bbox.west) / 2])
+            },
             tileUrl: mapTileUrl,
             fitKey: null,
             dayOrderMap: [],

@@ -96,7 +96,8 @@ export function useDashboard() {
     || trips.find(t => t.start_date && t.start_date >= today)
     || trips[0]
     || null
-  const rest = spotlight ? trips.filter(t => t.id !== spotlight.id) : trips
+  const withoutSpotlight = spotlight ? trips.filter(t => t.id !== spotlight.id) : trips
+  const rest = withoutSpotlight.length > 0 ? withoutSpotlight : trips
 
   // Pull the spotlight trip's members + places so the boarding pass can show
   // real buddies and place thumbnails instead of placeholders.
