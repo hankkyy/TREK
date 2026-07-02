@@ -567,7 +567,7 @@ const DEFAULT_ZONES = ['Asia/Ho_Chi_Minh', 'Europe/London', 'Asia/Tokyo']
 const FALLBACK_ZONES = [
   'Europe/London', 'Europe/Paris', 'Europe/Berlin', 'Europe/Madrid', 'Europe/Moscow',
   'America/New_York', 'America/Chicago', 'America/Denver', 'America/Los_Angeles', 'America/Sao_Paulo',
-  'Asia/Dubai', 'Asia/Kolkata', 'Asia/Bangkok', 'Asia/Shanghai', 'Asia/Tokyo', 'Asia/Singapore',
+  'Asia/Dubai', 'Asia/Kolkata', 'Asia/Bangkok', 'Asia/Ho_Chi_Minh', 'Asia/Shanghai', 'Asia/Tokyo', 'Asia/Singapore',
   'Australia/Sydney', 'Pacific/Auckland', 'UTC',
 ]
 
