@@ -417,25 +417,29 @@ export async function getStats(userId: number) {
     };
   });
 
-  const citySet = new Set<string>();
+  // Count unique cities by geographic proximity clustering.
+  // Places within ~15 km of each other are considered the same city.
+  // This is more reliable than address parsing, which breaks for domestic
+  // trips where the country name is absent and districts get miscounted.
+  const cityClusters: { lat: number; lng: number }[] = [];
+  const CITY_RADIUS_KM = 15;
+
   for (const place of places) {
-    if (place.address) {
-      const parts = place.address.split(',').map((s: string) => s.trim()).filter(Boolean);
-      if (parts.length === 0) continue;
-      // Only drop the last part if it's a known country; otherwise treat it as
-      // part of the city-level address (handles domestic addresses like
-      // "1 Ho\u1ea3 L\u00f2, Ho\u00e0n Ki\u1ebfm, Hanoi" where Hanoi is the city, not a country).
-      const lastIsCountry = parts.length >= 2 && getCountryFromAddress(place.address) !== null;
-      const candidates = lastIsCountry ? parts.slice(0, -1) : parts;
-      let city = '';
-      for (let i = candidates.length - 1; i >= 0; i--) {
-        const cleaned = candidates[i].replace(/[\d\-\u2212\u3012]+/g, '').trim();
-        if (cleaned) { city = cleaned.toLowerCase(); break; }
-      }
-      if (city) citySet.add(city);
+    if (place.lat == null || place.lng == null) continue;
+    const lat = Number(place.lat);
+    const lng = Number(place.lng);
+    if (!Number.isFinite(lat) || !Number.isFinite(lng)) continue;
+
+    let found = false;
+    for (const cluster of cityClusters) {
+      const dlat = (lat - cluster.lat) * 111.32;
+      const dlng = (lng - cluster.lng) * 111.32 * Math.cos(((lat + cluster.lat) / 2) * Math.PI / 180);
+      const dist = Math.sqrt(dlat * dlat + dlng * dlng);
+      if (dist <= CITY_RADIUS_KM) { found = true; break; }
     }
+    if (!found) cityClusters.push({ lat, lng });
   }
-  const totalCities = citySet.size;
+  const totalCities = cityClusters.length;
 
   // Merge manually marked countries
   const manualCountries = db.prepare('SELECT country_code FROM visited_countries WHERE user_id = ?').all(userId) as { country_code: string }[];
