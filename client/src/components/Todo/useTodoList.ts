@@ -43,7 +43,7 @@ export function useTodoList(tripId: number, items: TodoItem[], addItemSignal: nu
     }
     lastHandledAddSignal.current = addItemSignal
   }, [addItemSignal])
-  const [sortByPrio, setSortByPrio] = useState(false)
+  const [sortByPrio, setSortByPrio] = useState(true)
   const [addingCategory, setAddingCategory] = useState(false)
   const [newCategoryName, setNewCategoryName] = useState('')
   const [members, setMembers] = useState<Member[]>([])
