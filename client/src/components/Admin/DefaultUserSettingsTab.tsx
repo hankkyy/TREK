@@ -349,9 +349,6 @@ export default function DefaultUserSettingsTab(): React.ReactElement {
             onMapContextMenu: null,
             center: previewCenter,
             zoom: previewZoom,
-            onViewportChange: (bbox: { south: number; west: number; north: number; east: number }) => {
-              setPreviewCenter([(bbox.north + bbox.south) / 2, (bbox.east + bbox.west) / 2])
-            },
             tileUrl: mapTileUrl,
             fitKey: null,
             dayOrderMap: [],
