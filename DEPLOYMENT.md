@@ -144,6 +144,22 @@ scp -i ~/.ssh/trek-hanoi.key ubuntu@147.224.9.74:/tmp/trek-backup.tar.gz ~/trek-
 - **Commit**：`d1999cb`
 - **修复**：先用 `getCountryFromAddress()` 判断地址最后部分是否为真正的国家名，只有确认时才删除，否则保留为城市名
 
+### Bug 5：待办列表默认不按优先级排序
+- **Commit**：`f92be06`
+- **修复**：useTodoList 默认按优先级排序
+
+### Bug 6：Admin 地图预览 marker 不跟随拖拽 + 桌面端点击跳跃
+- **文件**：`client/src/components/Admin/DefaultUserSettingsTab.tsx` + `client/src/components/Map/MapView.tsx`
+- **修复**：新增 mapCenter 状态分离 marker 和地图居中逻辑；添加 onViewportChange 追踪拖拽；新增 preserveZoom 属性避免缩放重置
+
+### Bug 7：中文翻译大量缺漏（80+ 处）
+- **文件**：`shared/src/i18n/zh/*`（admin/settings/oauth/journey/dayplan/reservations/trip/notif/places/memories/system_notice）+ `server/src/services/passwordPolicy.ts` + `server/src/services/authService.ts`
+- **修复**：补全所有用户可见界面的中文翻译（Vacay→假期, Atlas→地图集, Collab→协作, Journey→旅程, Costs→费用 等）+ 密码验证和认证相关错误消息中文化
+
+### 优化：Dashboard 默认时区增加越南
+- **Commit**：本次
+- **修复**：DEFAULT_ZONES 加入 `Asia/Ho_Chi_Minh`（越南 GMT+7）
+
 ---
 
 ## 如何部署更新

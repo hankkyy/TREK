@@ -561,7 +561,7 @@ function CurrencyTool(): React.ReactElement {
 }
 
 // ── Timezone tool ────────────────────────────────────────────────────────────
-const DEFAULT_ZONES = ['Europe/London', 'Asia/Tokyo']
+const DEFAULT_ZONES = ['Asia/Ho_Chi_Minh', 'Europe/London', 'Asia/Tokyo']
 
 // Fallback for the rare browser without Intl.supportedValuesOf.
 const FALLBACK_ZONES = [

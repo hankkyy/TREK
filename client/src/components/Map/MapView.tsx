@@ -196,18 +196,19 @@ function SelectionController({ places, selectedPlaceId, dayPlaces, paddingOpts }
 interface MapControllerProps {
   center: [number, number]
   zoom: number
+  preserveZoom?: boolean
 }
 
-function MapController({ center, zoom }: MapControllerProps) {
+function MapController({ center, zoom, preserveZoom }: MapControllerProps) {
   const map = useMap()
   const prevCenter = useRef(center)
 
   useEffect(() => {
     if (prevCenter.current[0] !== center[0] || prevCenter.current[1] !== center[1]) {
-      map.setView(center, zoom)
+      map.setView(center, preserveZoom ? map.getZoom() : zoom)
       prevCenter.current = center
     }
-  }, [center, zoom, map])
+  }, [center, zoom, map, preserveZoom])
 
   return null
 }
@@ -410,6 +411,7 @@ export const MapView = memo(function MapView({
   onPoiClick,
   onViewportChange,
   scrollWheelZoom = true,
+  preserveZoom = false,
 }: any) {
   const poiMarkers = useMemo(() => (pois as Poi[]).map((poi: Poi) => (
     <Marker
@@ -593,7 +595,7 @@ export const MapView = memo(function MapView({
         referrerPolicy="strict-origin-when-cross-origin"
       />
 
-      <MapController center={center} zoom={zoom} />
+      <MapController center={center} zoom={zoom} preserveZoom={preserveZoom} />
       <BoundsController places={dayPlaces.length > 0 ? dayPlaces : places} fitKey={fitKey} paddingOpts={paddingOpts} hasDayDetail={hasDayDetail} />
       <SelectionController places={places} selectedPlaceId={selectedPlaceId} dayPlaces={dayPlaces} paddingOpts={paddingOpts} />
       <MapClickHandler onClick={onMapClick} />

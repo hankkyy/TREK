@@ -111,6 +111,9 @@ export default function DefaultUserSettingsTab(): React.ReactElement {
   const [mapboxStyle, setMapboxStyle] = useState('')
   const [previewCenter, setPreviewCenter] = useState<[number, number]>([48.8566, 2.3522])
   const [previewZoom, setPreviewZoom] = useState(10)
+  // Separate center for MapController: only updated on coordinate-input / viewport drag,
+  // NOT on click — so clicking moves the marker without forcing the map to recenter.
+  const [mapCenter, setMapCenter] = useState<[number, number]>([48.8566, 2.3522])
 
   useEffect(() => {
     adminApi.getDefaultUserSettings().then((data: Defaults) => {
@@ -344,13 +347,21 @@ export default function DefaultUserSettingsTab(): React.ReactElement {
             selectedPlaceId: null,
             onMarkerClick: null,
             onMapClick: (e: { latlng: { lat: number; lng: number } }) => {
+              // Move marker to click position WITHOUT recentering the map
               setPreviewCenter([e.latlng.lat, e.latlng.lng])
             },
             onMapContextMenu: null,
-            center: previewCenter,
+            center: mapCenter,
             zoom: previewZoom,
             tileUrl: mapTileUrl,
             fitKey: null,
+            preserveZoom: true,
+            onViewportChange: (b: { south: number; west: number; north: number; east: number }) => {
+              const lat = (b.south + b.north) / 2
+              const lng = (b.west + b.east) / 2
+              setPreviewCenter([lat, lng])
+              setMapCenter([lat, lng])
+            },
             dayOrderMap: [],
             leftWidth: 0,
             rightWidth: 0,
@@ -364,7 +375,11 @@ export default function DefaultUserSettingsTab(): React.ReactElement {
             type="number"
             step="0.0001"
             value={previewCenter[0]}
-            onChange={(e) => setPreviewCenter([parseFloat(e.target.value) || 0, previewCenter[1]])}
+            onChange={(e) => {
+              const lat = parseFloat(e.target.value) || 0
+              setPreviewCenter([lat, previewCenter[1]])
+              setMapCenter([lat, previewCenter[1]])
+            }}
             style={{ width: 80, padding: '2px 6px', fontSize: 11, border: '1px solid #d1d5db', borderRadius: 6 }}
             title="纬度 Latitude"
           />
@@ -372,7 +387,11 @@ export default function DefaultUserSettingsTab(): React.ReactElement {
             type="number"
             step="0.0001"
             value={previewCenter[1]}
-            onChange={(e) => setPreviewCenter([previewCenter[0], parseFloat(e.target.value) || 0])}
+            onChange={(e) => {
+              const lng = parseFloat(e.target.value) || 0
+              setPreviewCenter([previewCenter[0], lng])
+              setMapCenter([previewCenter[0], lng])
+            }}
             style={{ width: 80, padding: '2px 6px', fontSize: 11, border: '1px solid #d1d5db', borderRadius: 6 }}
             title="经度 Longitude"
           />

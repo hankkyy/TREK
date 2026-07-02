@@ -153,10 +153,10 @@ const reservations: TranslationStrings = {
   'reservations.airtrail.otherFlights': '其他航班',
   'reservations.airtrail.empty': '您的 AirTrail 账户中未找到航班。',
   'reservations.airtrail.importCta': '导入 {count}',
-  'reservations.costsLabel': 'Costs',
-  'reservations.createExpense': 'Create expense',
-  'reservations.createExpenseHint': 'Saves the booking, then opens the Costs editor.',
-  'reservations.linkedExpense': 'Linked expense',
-  'reservations.removeExpense': 'Remove expense',
+  'reservations.costsLabel': '费用',
+  'reservations.createExpense': '创建费用',
+  'reservations.createExpenseHint': '保存预订，然后打开费用编辑器。',
+  'reservations.linkedExpense': '已关联费用',
+  'reservations.removeExpense': '移除费用',
 };
 export default reservations;

@@ -391,24 +391,24 @@ export function registerUser(body: {
   if (userCount > 0 && !validInvite) {
     const toggles = resolveAuthToggles();
     if (!toggles.password_registration) {
-      return { error: 'Password registration is disabled. Contact your administrator.', status: 403 };
+      return { error: '密码注册已禁用，请联系管理员', status: 403 };
     }
   }
 
   if (!username || !email || !password) {
-    return { error: 'Username, email and password are required', status: 400 };
+    return { error: '用户名、邮箱和密码为必填项', status: 400 };
   }
 
   const pwCheck = validatePassword(password);
   if (!pwCheck.ok) return { error: pwCheck.reason, status: 400 };
 
   if (!EMAIL_REGEX.test(email)) {
-    return { error: 'Invalid email format', status: 400 };
+    return { error: '邮箱格式无效', status: 400 };
   }
 
   const existingUser = db.prepare('SELECT id FROM users WHERE LOWER(email) = LOWER(?) OR LOWER(username) = LOWER(?)').get(email, username);
   if (existingUser) {
-    return { error: 'Registration failed. Please try different credentials.', status: 409 };
+    return { error: '注册失败，请尝试其他凭据', status: 409 };
   }
 
   const password_hash = bcrypt.hashSync(password, BCRYPT_COST);
@@ -460,13 +460,13 @@ export function loginUser(body: {
   auditDetails?: Record<string, unknown>;
 } {
   if (isOidcOnlyMode()) {
-    return { error: 'Password authentication is disabled. Please sign in with SSO.', status: 403 };
+    return { error: '密码登录已禁用，请使用 SSO 登录', status: 403 };
   }
 
   const { email, password, remember_me } = body;
   const remember = remember_me === true;
   if (!email || !password) {
-    return { error: 'Email and password are required', status: 400 };
+    return { error: '邮箱和密码为必填项', status: 400 };
   }
 
   const user = db.prepare('SELECT * FROM users WHERE LOWER(email) = LOWER(?)').get(email) as User | undefined;
@@ -544,22 +544,22 @@ export function changePassword(
   body: { current_password?: string; new_password?: string }
 ): { error?: string; status?: number; success?: boolean; token?: string } {
   if (isOidcOnlyMode()) {
-    return { error: 'Password authentication is disabled.', status: 403 };
+    return { error: '密码登录已禁用', status: 403 };
   }
   if (process.env.DEMO_MODE === 'true' && isDemoEmail(userEmail)) {
     return { error: 'Password change is disabled in demo mode.', status: 403 };
   }
 
   const { current_password, new_password } = body;
-  if (!current_password) return { error: 'Current password is required', status: 400 };
-  if (!new_password) return { error: 'New password is required', status: 400 };
+  if (!current_password) return { error: '当前密码为必填项', status: 400 };
+  if (!new_password) return { error: '新密码为必填项', status: 400 };
 
   const pwCheck = validatePassword(new_password);
   if (!pwCheck.ok) return { error: pwCheck.reason, status: 400 };
 
   const user = db.prepare('SELECT password_hash, password_version FROM users WHERE id = ?').get(userId) as { password_hash: string; password_version?: number } | undefined;
   if (!user || !bcrypt.compareSync(current_password, user.password_hash)) {
-    return { error: 'Current password is incorrect', status: 401 };
+    return { error: '当前密码错误', status: 401 };
   }
 
   const hash = bcrypt.hashSync(new_password, BCRYPT_COST);
@@ -644,22 +644,22 @@ export function updateSettings(
   if (username !== undefined) {
     const trimmed = username.trim();
     if (!trimmed || trimmed.length < 2 || trimmed.length > 50) {
-      return { error: 'Username must be between 2 and 50 characters', status: 400 };
+      return { error: '用户名长度需在2到50个字符之间', status: 400 };
     }
     if (!/^[a-zA-Z0-9_.-]+$/.test(trimmed)) {
-      return { error: 'Username can only contain letters, numbers, underscores, dots and hyphens', status: 400 };
+      return { error: '用户名只能包含字母、数字、下划线、点和连字符', status: 400 };
     }
     const conflict = db.prepare('SELECT id FROM users WHERE LOWER(username) = LOWER(?) AND id != ?').get(trimmed, userId);
-    if (conflict) return { error: 'Username already taken', status: 409 };
+    if (conflict) return { error: '用户名已被占用', status: 409 };
   }
 
   if (email !== undefined) {
     const trimmed = email.trim();
     if (!trimmed || !EMAIL_REGEX.test(trimmed)) {
-      return { error: 'Invalid email format', status: 400 };
+      return { error: '邮箱格式无效', status: 400 };
     }
     const conflict = db.prepare('SELECT id FROM users WHERE LOWER(email) = LOWER(?) AND id != ?').get(trimmed, userId);
-    if (conflict) return { error: 'Email already taken', status: 409 };
+    if (conflict) return { error: '邮箱已被占用', status: 409 };
   }
 
   const updates: string[] = [];
@@ -1014,7 +1014,7 @@ export function setupMfa(userId: number, userEmail: string): { error?: string; s
 
 export function enableMfa(userId: number, code?: string): { error?: string; status?: number; success?: boolean; mfa_enabled?: boolean; backup_codes?: string[] } {
   if (!code) {
-    return { error: 'Verification code is required', status: 400 };
+    return { error: '验证码为必填项', status: 400 };
   }
   const pending = getPendingMfaSecret(userId);
   if (!pending) {
@@ -1023,7 +1023,7 @@ export function enableMfa(userId: number, code?: string): { error?: string; stat
   const tokenStr = String(code).replace(/\s/g, '');
   const ok = authenticator.verify({ token: tokenStr, secret: pending });
   if (!ok) {
-    return { error: 'Invalid verification code', status: 401 };
+    return { error: '验证码无效', status: 401 };
   }
   const backupCodes = generateBackupCodes();
   const backupHashes = backupCodes.map(hashBackupCodeBcrypt);
@@ -1051,20 +1051,20 @@ export function disableMfa(
   }
   const { password, code } = body;
   if (!password || !code) {
-    return { error: 'Password and authenticator code are required', status: 400 };
+    return { error: '密码和验证码为必填项', status: 400 };
   }
   const user = db.prepare('SELECT * FROM users WHERE id = ?').get(userId) as User | undefined;
   if (!user?.mfa_enabled || !user.mfa_secret) {
     return { error: 'MFA is not enabled', status: 400 };
   }
   if (!user.password_hash || !bcrypt.compareSync(password, user.password_hash)) {
-    return { error: 'Incorrect password', status: 401 };
+    return { error: '密码错误', status: 401 };
   }
   const secret = decryptMfaSecret(user.mfa_secret);
   const tokenStr = String(code).replace(/\s/g, '');
   const ok = authenticator.verify({ token: tokenStr, secret });
   if (!ok) {
-    return { error: 'Invalid verification code', status: 401 };
+    return { error: '验证码无效', status: 401 };
   }
   db.prepare('UPDATE users SET mfa_enabled = 0, mfa_secret = NULL, mfa_backup_codes = NULL, updated_at = CURRENT_TIMESTAMP WHERE id = ?').run(
     userId
@@ -1108,7 +1108,7 @@ export function verifyMfaLogin(body: {
       // any store older than the bcrypt migration keeps working.
       const idx = hashes.findIndex((h) => matchBackupCode(tokenStr, h));
       if (idx === -1) {
-        return { error: 'Invalid verification code', status: 401 };
+        return { error: '验证码无效', status: 401 };
       }
       hashes.splice(idx, 1);
       db.prepare('UPDATE users SET mfa_backup_codes = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?').run(
@@ -1126,7 +1126,7 @@ export function verifyMfaLogin(body: {
       auditUserId: Number(user.id),
     };
   } catch {
-    return { error: 'Invalid or expired verification token', status: 401 };
+    return { error: '验证令牌无效或已过期', status: 401 };
   }
 }
 
@@ -1257,7 +1257,7 @@ export function resetPassword(body: {
 }): ResetPasswordOutcome {
   const { token, new_password, mfa_code } = body;
   if (!token || typeof token !== 'string') {
-    return { error: 'Reset token is required', status: 400 };
+    return { error: '重置令牌为必填项', status: 400 };
   }
   if (!new_password || typeof new_password !== 'string') {
     return { error: 'New password is required', status: 400 };
@@ -1274,10 +1274,10 @@ export function resetPassword(body: {
     | { id: number; user_id: number; expires_at: string; consumed_at: string | null }
     | undefined;
 
-  if (!row) return { error: 'Invalid or expired reset link', status: 400 };
-  if (row.consumed_at) return { error: 'This reset link has already been used', status: 400 };
+  if (!row) return { error: '重置链接无效或已过期', status: 400 };
+  if (row.consumed_at) return { error: '此重置链接已被使用', status: 400 };
   if (new Date(row.expires_at).getTime() < Date.now()) {
-    return { error: 'Reset link has expired. Please request a new one.', status: 400 };
+    return { error: '重置链接已过期，请重新申请', status: 400 };
   }
 
   const user = db.prepare(
@@ -1286,7 +1286,7 @@ export function resetPassword(body: {
     | { id: number; email: string; mfa_enabled: number | boolean; mfa_secret: string | null; mfa_backup_codes: string | null; password_version: number }
     | undefined;
 
-  if (!user) return { error: 'Invalid or expired reset link', status: 400 };
+  if (!user) return { error: '重置链接无效或已过期', status: 400 };
 
   // MFA gate. If enabled, require a valid TOTP or backup code.
   const mfaOn = user.mfa_enabled === 1 || user.mfa_enabled === true;

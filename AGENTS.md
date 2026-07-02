@@ -30,6 +30,8 @@ curl -sI https://hanktrip.com  # HTTP 200
 | 4 | Atlas 城市数错误 | `server/.../atlasService.ts` | `4bf3688` |
 | 5 | 待办列表默认优先级排序 | `client/.../useTodoList.ts` | `f92be06` |
 | 6 | 版本号 vdev→3.1.4 | Dockerfile build-arg | 构建参数 |
+| 7 | Admin 地图预览 marker 不跟随拖拽+点击跳跃 | `DefaultUserSettingsTab.tsx` + `MapView.tsx` | 本次 |
+| 8 | 中文翻译全面补全（80+ 处）+ 密码验证错误中文化 | `shared/src/i18n/zh/*` + `passwordPolicy.ts` + `authService.ts` | 本次 |
 
 ## 部署方式
 

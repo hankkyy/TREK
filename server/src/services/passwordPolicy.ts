@@ -8,17 +8,17 @@ const COMMON_PASSWORDS = new Set([
 ]);
 
 export function validatePassword(password: string): { ok: boolean; reason?: string } {
-  if (password.length < 8) return { ok: false, reason: 'Password must be at least 8 characters' };
+  if (password.length < 8) return { ok: false, reason: '密码至少需要8个字符' };
 
   if (/^(.)\1+$/.test(password)) {
-    return { ok: false, reason: 'Password is too repetitive' };
+    return { ok: false, reason: '密码过于重复' };
   }
 
   if (COMMON_PASSWORDS.has(password.toLowerCase())) {
-    return { ok: false, reason: 'Password is too common. Please choose a unique password.' };
+    return { ok: false, reason: '密码过于常见，请选择一个独特的密码' };
   }
 
-  const requirementsMessage = 'Password must contain at least one uppercase letter, one lowercase letter, one number, and one special character';
+  const requirementsMessage = '密码必须包含至少一个大写字母、一个小写字母、一个数字和一个特殊字符';
   if (!/[A-Z]/.test(password)) return { ok: false, reason: requirementsMessage };
   if (!/[a-z]/.test(password)) return { ok: false, reason: requirementsMessage };
   if (!/[0-9]/.test(password)) return { ok: false, reason: requirementsMessage };
