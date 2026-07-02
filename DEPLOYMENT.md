@@ -1,30 +1,31 @@
 # hanktrip.com — TREK 部署与维护文档
 
-> 最后更新：2026-07-02 | 维护者：hankkyy
+> 最后更新：2026-07-02 | 维护者：hankkyy  
+> **唯一文档**：本文件是项目所有信息的唯一来源。旧 `trek-hanoi` 仓库已归档废弃。
 
 ---
 
-## 项目概述
+## 在线访问
 
-基于 [mauriceboe/TREK](https://github.com/mauriceboe/TREK) v3.1.4 fork，自托管旅行规划器。
+| 服务 | 地址 |
+|------|------|
+| TREK 主站 | https://hanktrip.com |
+| 直连（不走 CDN） | http://147.224.9.74:3000 |
 
-- **线上地址**：`https://hanktrip.com`
-- **本地访问**：`http://localhost:3000`
-- **源码仓库**：`https://github.com/hankkyy/TREK`
-- **上游仓库**：`https://github.com/mauriceboe/TREK`
-- **旧项目 (Hanoi 静态站)**：`https://github.com/hankkyy/trek-hanoi`（已废弃，Fly.io 配置已删除）
-  - 原为单页 HTML（`Desktop/hanoi-vercel/index.html`），部署在 Vercel
-  - 2026-07-02 迁移至 TREK 自托管方案
-  - 旧数据在 CloudBase（`hanoi-d4gj8vd2q1e7a3dc0`），bucket_list / itinerary 等集合
+---
 
-## 本地环境
+## 服务器
 
-| 项目 | 路径 | 说明 |
-|------|------|------|
-| TREK 源码 | `~/Desktop/TREK/` | Docker 构建 + 源码修改 |
-| Docker 数据 | `~/trek-data/data/` | SQLite + 日志 + 密钥 |
-| Docker 上传 | `~/trek-data/uploads/` | 用户文件 |
-| 旧 Hanoi 站 | `~/Desktop/hanoi-vercel/` | 已废弃，仅参考 |
+| 项目 | 详情 |
+|------|------|
+| 云平台 | Oracle Cloud Always Free |
+| 区域 | us-sanjose-1 |
+| 机型 | VM.Standard.E2.1.Micro（ARM，1 OCPU，1GB RAM + 2GB swap） |
+| 系统 | Ubuntu 22.04.5 LTS |
+| 磁盘 | 45GB（已用 7.5GB） |
+| 公网 IP | `147.224.9.74` |
+| SSH 连接 | `ssh -i ~/.ssh/trek-hanoi.key ubuntu@147.224.9.74` |
+| SSH 密钥 | `~/.ssh/trek-hanoi.key`（RSA） |
 
 ---
 
@@ -34,202 +35,173 @@
 用户浏览器
     │
     ▼
-https://hanktrip.com (Cloudflare DNS: 104.21.42.2 / 172.67.154.89)
+https://hanktrip.com  ──── Cloudflare DNS (104.21.42.2 / 172.67.154.89)
     │
     ▼
-Cloudflare Tunnel
+Cloudflare Tunnel (cloudflared, 运行在 Oracle 实例上)
     │
     ▼
-本机 Docker Desktop → TREK 容器 :3000
+Docker: TREK 容器 (localhost:3000)
 ```
 
-### Docker 容器（本机 Mac）
+### Cloudflare Tunnel 配置
+
+- **配置路径**：`/etc/cloudflared/config.yml`
+- **Tunnel ID**：`518f0880-d85f-4edc-b02b-b40884ac35ac`
+- **证书路径**：`/etc/cloudflared/518f0880-d85f-4edc-b02b-b40884ac35ac.json`
+- **路由**：`hanktrip.com` 和 `trek.hanktrip.com` → `http://localhost:3000`
+- **进程**：cloudflared 由 systemd 管理，开机自启
+
+### Docker 容器
 
 ```
 镜像: hankkyy/trek:latest
 容器名: trek
 端口: 3000:3000
-重启策略: unless-stopped
+数据卷: trek-data → /app/data, trek-uploads → /app/uploads
+重启策略: Docker restart policy (--restart unless-stopped)
 ```
 
-### Cloudflare Tunnel
+### 环境变量
 
-Cloudflared 位于：`~/.hermes/profiles/backend-engineer/home/.local/bin/cloudflared`（版本 2026.6.1）
+| 变量 | 值 | 说明 |
+|------|-----|------|
+| `NODE_ENV` | `production` | 生产模式 |
+| `ENCRYPTION_KEY` | `af8d6ed365...` | 数据加密密钥 |
+| `ADMIN_EMAIL` | `hank.zihao@gmail.com` | 管理员邮箱 |
+| `ADMIN_PASSWORD` | `123` | 管理员密码 |
+| `COOKIE_SECURE` | `false` | ⚠️ 必须为 false，否则 HTTP 登录 cookie 被丢弃 |
+| `ALLOW_PUBLIC_REGISTRATION` | `false` | 禁止公开注册 |
 
-**⚠️ 已知问题：Mac 关机则站点下线**
+---
 
-TREK 运行在本机 Docker Desktop 上，依赖 Mac 保持开机。如果 Mac 休眠或关机，`hanktrip.com` 将不可访问。
+## 本地开发环境（Mac）
 
-**建议升级方案**（按推荐度排序）：
-1. **Fly.io**（有免费额度）— 项目已在 trek-hanoi 中配过 fly.toml
-2. **Oracle Cloud 永久免费 ARM VPS**（4 核 24GB）— 完全免费
-3. **Railway / Render** — 简单部署，有免费层
-4. **树莓派** — 放家里 24h 运行，功耗极低
+| 项目 | 路径 | 说明 |
+|------|------|------|
+| TREK 源码 | `~/Desktop/TREK/` | Git 仓库，修改后 push 到 GitHub |
+| 本地 Docker | 不要用 | 本地只做代码修改和构建，不运行生产 |
+| 生产 SSH | `ssh -i ~/.ssh/trek-hanoi.key ubuntu@147.224.9.74` | 连接 Oracle 服务器 |
 
-### 数据目录（绝对不能删除）
+---
 
-| 路径 | 内容 |
-|------|------|
-| `~/trek-data/data/` | SQLite 数据库、日志、备份、密钥 |
-| `~/trek-data/uploads/` | 用户上传的文件、封面、头像、照片 |
-| `~/trek-data/data/travel.db` | 主数据库（所有行程、地点、用户数据） |
+## 数据备份
 
-### 管理员账号
-
-```
-邮箱: admin@trek.local
-密码: trekadmin2026
-```
-
-### 启动命令参考
+数据存储在 Oracle 实例的 Docker volumes 中：
 
 ```bash
-docker run -d --name trek -p 3000:3000 \
-  -e ENCRYPTION_KEY=<密钥> \
-  -e ADMIN_EMAIL=admin@trek.local \
-  -e ADMIN_PASSWORD=trekadmin2026 \
-  -v ~/trek-data/data:/app/data \
-  -v ~/trek-data/uploads:/app/uploads \
-  --restart unless-stopped \
-  hankkyy/trek:latest
+# 查看数据
+ssh -i ~/.ssh/trek-hanoi.key ubuntu@147.224.9.74
+docker volume ls | grep trek
+# trek-data → /app/data (SQLite 数据库 + 日志)
+# trek-uploads → /app/uploads (用户文件)
+```
+
+**备份命令**：
+```bash
+# 备份到本地 Mac
+ssh -i ~/.ssh/trek-hanoi.key ubuntu@147.224.9.74 "docker run --rm -v trek-data:/data -v trek-uploads:/uploads alpine tar czf /tmp/trek-backup.tar.gz /data /uploads"
+scp -i ~/.ssh/trek-hanoi.key ubuntu@147.224.9.74:/tmp/trek-backup.tar.gz ~/trek-backup-$(date +%Y%m%d).tar.gz
 ```
 
 ---
 
-## 已修复的 Bug（2026-07-02）
+## 行程数据
+
+**🇻🇳 河内 × 下龙湾** · 2026年7月23日–26日 · 4天4晚
+
+| 模块 | 数量 |
+|------|------|
+| 地点 | 72 |
+| 日程 | 38 条 |
+| 预订 | 4 项 |
+| 预算 | 11 项 |
+| 打包清单 | 13 项 |
+| 打卡待办 | 55 项 |
+| 笔记 | 9 篇 |
+
+---
+
+## Bug 修复记录
 
 ### Bug 1：地点描述和备注重复显示
-
-**症状**：点击行程中的地点，描述（description）和备注（notes）显示相同内容两次。
-
-**原因**：`PlaceInspector.tsx` 中，`place.description` 和 `place.notes` 分别渲染，但当 Google Places 导入或手动添加时，两个字段可能被填入相同内容。
-
-**修复**：`client/src/components/Planner/PlaceInspector.tsx` 第 270 行
-
-```diff
-- {place.notes && (
-+ {place.notes && place.notes.trim() !== (place.description || '').trim() && (
-```
-
-**Commit**: `303e9d5`
-
----
+- **文件**：`client/src/components/Planner/PlaceInspector.tsx`
+- **Commit**：`303e9d5`
+- **修复**：当 `place.notes` 与 `place.description` 完全相同时，跳过 notes 渲染
 
 ### Bug 2：Dashboard「已计划」显示"暂无旅行"
-
-**症状**：首页能看到行程即将开始，但下方旅行列表「已计划」标签显示"暂无旅行，创建你的第一次旅行"。
-
-**原因**：`useDashboard.ts` 中，spotlight（首页大幅展示的最近行程）会从 grid 列表中排除。当用户只有一个行程时，spotlight 独占后 grid 为空。
-
-**修复**：`client/src/pages/dashboard/useDashboard.ts` 第 99 行
-
-```diff
-- const rest = spotlight ? trips.filter(t => t.id !== spotlight.id) : trips
-+ const withoutSpotlight = spotlight ? trips.filter(t => t.id !== spotlight.id) : trips
-+ const rest = withoutSpotlight.length > 0 ? withoutSpotlight : trips
-```
-
-逻辑：如果排除 spotlight 后 grid 为空，则保留 spotlight 在 grid 中。有多个行程时行为不变。
-
-**Commit**: `303e9d5`
-
----
+- **文件**：`client/src/pages/dashboard/useDashboard.ts`
+- **Commit**：`303e9d5`
+- **修复**：当排除 spotlight 行程后 grid 为空时，保留 spotlight 在 grid 中
 
 ### Bug 3：管理后台地图预览 center 无法拖动
+- **文件**：`client/src/components/Admin/DefaultUserSettingsTab.tsx`
+- **Commit**：`303e9d5`
+- **修复**：添加 `previewCenter`/`previewZoom` state + `onViewportChange` 回调
 
-**症状**：管理后台 → 用户默认设置 → 地图模板 → 预览地图无法拖动来调整默认中心点。
-
-**原因**：预览地图的 center 硬编码为 `[48.8566, 2.3522]`（巴黎），没有 `onViewportChange` 回调。
-
-**修复**：`client/src/components/Admin/DefaultUserSettingsTab.tsx`
-
-1. 添加 state：`previewCenter` 和 `previewZoom`
-2. 传入 `onViewportChange` 回调实时更新坐标
-3. 地图拖动/缩放时会更新 center state
-
-**Commit**: `303e9d5`
+### Bug 4：Atlas 显示 30 个城市（实际只有河内&下龙）
+- **文件**：`server/src/services/atlasService.ts`
+- **Commit**：`d1999cb`
+- **修复**：先用 `getCountryFromAddress()` 判断地址最后部分是否为真正的国家名，只有确认时才删除，否则保留为城市名
 
 ---
 
-### Bug 4：Atlas 显示 30 个城市（实际只有河内和下龙）
+## 如何部署更新
 
-**症状**：Atlas 页统计显示 30 个城市，但用户只去了河内和下龙湾。
-
-**原因**：`atlasService.ts` 的城市计数算法假设地址最后一部分是国家名，总是删除最后一部分。对于越南地址 `"1 Hoả Lò, Hoàn Kiếm, Hanoi"`，它错误地将 `Hanoi`（城市）当作"国家"删掉，然后将 `Hoàn Kiếm`（郡/区）计为一个"城市"。30 个地点分布在不同的郡，就变成了 30 个"城市"。
-
-**修复**：`server/src/services/atlasService.ts` 第 420-436 行
-
-```diff
-- const candidates = parts.length >= 2 ? parts.slice(0, -1) : parts;
-+ const lastIsCountry = parts.length >= 2 && getCountryFromAddress(place.address) !== null;
-+ const candidates = lastIsCountry ? parts.slice(0, -1) : parts;
-```
-
-逻辑：先用已有的 `getCountryFromAddress()` 判断最后一部分是不是真正的国家名。只有确认是国家名时才删除，否则保留（视为城市名）。
-
-**Commit**: `d1999cb`
-
----
-
-## 代码改动概览
-
-| 文件 | 改动 | Commit |
-|------|------|--------|
-| `client/src/components/Planner/PlaceInspector.tsx` | +1/-1 | `303e9d5` |
-| `client/src/pages/dashboard/useDashboard.ts` | +2/-1 | `303e9d5` |
-| `client/src/components/Admin/DefaultUserSettingsTab.tsx` | +7/-2 | `303e9d5` |
-| `server/src/services/atlasService.ts` | +6/-5 | `d1999cb` |
-
-总计：4 个文件，16 行新增，9 行删除。
-
----
-
-## 如何更新部署
+### 方法 1：从 Mac 构建并推送到 Oracle（推荐）
 
 ```bash
-# 1. 进入项目目录
+# 1. 本地构建
 cd ~/Desktop/TREK
-
-# 2. 拉取最新代码
 git pull origin main
-
-# 3. 构建新镜像
 docker build --network=host -t hankkyy/trek:latest .
 
-# 4. 停止旧容器，启动新容器（保持同样的 -v 挂载）
-docker rm -f trek
-docker run -d --name trek -p 3000:3000 \
-  -e ENCRYPTION_KEY=<保持不变> \
-  -e ADMIN_EMAIL=admin@trek.local \
-  -e ADMIN_PASSWORD=trekadmin2026 \
-  -v ~/trek-data/data:/app/data \
-  -v ~/trek-data/uploads:/app/uploads \
-  --restart unless-stopped \
-  hankkyy/trek:latest
+# 2. 导出并传输到 Oracle
+docker save hankkyy/trek:latest | gzip > /tmp/trek-image.tar.gz
+scp -i ~/.ssh/trek-hanoi.key /tmp/trek-image.tar.gz ubuntu@147.224.9.74:/tmp/
 
-# 5. 检查日志
-docker logs trek -f
+# 3. 在 Oracle 上加载并重启
+ssh -i ~/.ssh/trek-hanoi.key ubuntu@147.224.9.74 "
+  docker load < /tmp/trek-image.tar.gz
+  docker stop trek && docker rm trek
+  docker run -d --name trek -p 3000:3000 \
+    -e ENCRYPTION_KEY=af8d6ed365a04e9bf46be39d049359d284297c1160fdd6648e3e28b63d29bd87 \
+    -e NODE_ENV=production \
+    -e COOKIE_SECURE=false \
+    -e ADMIN_EMAIL=hank.zihao@gmail.com \
+    -e ADMIN_PASSWORD=123 \
+    -e ALLOW_PUBLIC_REGISTRATION=false \
+    -v trek-data:/app/data \
+    -v trek-uploads:/app/uploads \
+    --restart unless-stopped \
+    hankkyy/trek:latest
+  rm /tmp/trek-image.tar.gz
+"
 ```
 
-> ⚠️ 只要 `-v ~/trek-data/data:/app/data` 和 `-v ~/trek-data/uploads:/app/uploads` 不变，所有数据永久保留。
+### 方法 2：直接在 Oracle 上构建
+
+```bash
+# Oracle 实例 RAM 只有 1GB，构建时需启用 swap
+ssh -i ~/.ssh/trek-hanoi.key ubuntu@147.224.9.74
+git clone https://github.com/hankkyy/TREK.git /tmp/trek-build
+cd /tmp/trek-build
+docker build -t hankkyy/trek:latest .
+# 然后同上重启容器
+```
 
 ---
 
-## 升级上游版本
+## 上游升级
 
 当 `mauriceboe/TREK` 发布新版本时：
 
 ```bash
-# 1. 添加上游远程
-git remote add upstream https://github.com/mauriceboe/TREK.git
-
-# 2. 拉取上游
-git fetch upstream
+cd ~/Desktop/TREK
+git fetch upstream main  # 或从 mauriceboe/TREK 拉取
 git merge upstream/main
-
-# 3. 解决冲突（如有），重点关注我们改过的 4 个文件
-
-# 4. 构建 + 部署（同上）
+# 解决冲突（重点关注我们改过的 4 个文件）
+# 构建 + 部署（见上）
 ```
 
 ---
@@ -238,50 +210,48 @@ git merge upstream/main
 
 ### 站点无法访问
 ```bash
-# 1. 检查 Docker 容器
-docker ps | grep trek          # 状态应为 "healthy"
-
-# 2. 检查本地是否可用
-curl -sI http://localhost:3000 # 应返回 200 OK
-
-# 3. 检查 Cloudflare Tunnel
-#    确认 cloudflared 进程在运行（可能通过 Hermes 管理）
-ps aux | grep cloudflared
-
-# 4. 检查外网可达性
-curl -sI https://hanktrip.com  # 应返回 200 OK
+# 1. 检查 Oracle 实例是否在线
+ssh -i ~/.ssh/trek-hanoi.key ubuntu@147.224.9.74 "docker ps | grep trek"
+# 2. 检查 Cloudflare Tunnel
+ssh -i ~/.ssh/trek-hanoi.key ubuntu@147.224.9.74 "systemctl status cloudflared"
+# 3. 检查本地可达性
+curl -sI http://147.224.9.74:3000
+# 4. 检查域名可达性
+curl -sI https://hanktrip.com
 ```
 
-### 容器启动失败
+### RAM 不足导致 Docker 构建失败
 ```bash
-docker logs trek           # 查看日志
-docker inspect trek        # 查看配置
+# Oracle 实例上启用 2GB swap
+ssh -i ~/.ssh/trek-hanoi.key ubuntu@147.224.9.74
+sudo fallocate -l 2G /swapfile && sudo chmod 600 /swapfile
+sudo mkswap /swapfile && sudo swapon /swapfile
 ```
 
-### 数据恢复
+### Docker 数据卷位置
 ```bash
-# 备份数据库
-cp ~/trek-data/data/travel.db ~/trek-data/data/travel.db.bak.$(date +%Y%m%d)
-```
-
-### 重置管理员密码
-```bash
-# 删除数据库中的用户表会丢失所有数据，建议：
-# 1. 在 TREK 管理后台直接修改
-# 2. 或删除数据库重新初始化（会丢失数据！）
-```
-
-### 端口冲突
-```bash
-# 如果 3000 端口被占用
-docker run ... -p 3001:3000 ...   # 改为主机端口 3001
+# 查看实际存储路径
+docker volume inspect trek-data | grep Mountpoint
+# 通常在 /var/lib/docker/volumes/trek-data/_data/
 ```
 
 ---
 
-## 相关链接
+## 关联项目（历史）
 
-- 上游项目：https://github.com/mauriceboe/TREK
-- Demo：https://demo.liketrek.com
-- Docker Hub：https://hub.docker.com/r/mauriceboe/trek
-- Discord：https://discord.gg/NhZBDSd4qW
+| 项目 | 状态 |
+|------|------|
+| `hankkyy/TREK` | ✅ 当前，活跃维护 |
+| `mauriceboe/TREK` | 上游源，只读 |
+| `hankkyy/trek-hanoi` | ❌ 已归档废弃，所有信息已迁移至本文档 |
+| `hankkyy/hanoi-trip`（hanoi-vercel） | ❌ 旧静态站，已迁移至 TREK |
+| CloudBase `hanoi-d4gj8vd2q1e7a3dc0` | 旧数据库，保留但不再使用 |
+
+---
+
+## ⚠️ 重要注意事项
+
+1. **COOKIE_SECURE=false**：Oracle 实例只有 HTTP（没有 TLS 证书），必须设为 false，否则登录后 cookie 被浏览器丢弃
+2. **Cloudflare 提供 HTTPS**：用户访问 hanktrip.com 通过 Cloudflare 的 HTTPS，内部 Oracle ↔ Cloudflare 通过 Cloudflare Tunnel 加密
+3. **1GB RAM 限制**：Oracle 永久免费实例内存紧张，构建镜像建议在 Mac 上完成再传过去
+4. **数据备份**：定期备份 `trek-data` 和 `trek-uploads` volumes
