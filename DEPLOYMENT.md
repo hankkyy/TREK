@@ -13,12 +13,37 @@
 - **源码仓库**：`https://github.com/hankkyy/TREK`
 - **上游仓库**：`https://github.com/mauriceboe/TREK`
 - **旧项目 (Hanoi 静态站)**：`https://github.com/hankkyy/trek-hanoi`（已废弃，Fly.io 配置已删除）
+  - 原为单页 HTML（`Desktop/hanoi-vercel/index.html`），部署在 Vercel
+  - 2026-07-02 迁移至 TREK 自托管方案
+  - 旧数据在 CloudBase（`hanoi-d4gj8vd2q1e7a3dc0`），bucket_list / itinerary 等集合
+
+## 本地环境
+
+| 项目 | 路径 | 说明 |
+|------|------|------|
+| TREK 源码 | `~/Desktop/TREK/` | Docker 构建 + 源码修改 |
+| Docker 数据 | `~/trek-data/data/` | SQLite + 日志 + 密钥 |
+| Docker 上传 | `~/trek-data/uploads/` | 用户文件 |
+| 旧 Hanoi 站 | `~/Desktop/hanoi-vercel/` | 已废弃，仅参考 |
 
 ---
 
-## 部署方式
+## 部署架构
 
-### Docker 容器（本机 Docker Desktop）
+```
+用户浏览器
+    │
+    ▼
+https://hanktrip.com (Cloudflare DNS: 104.21.42.2 / 172.67.154.89)
+    │
+    ▼
+Cloudflare Tunnel
+    │
+    ▼
+本机 Docker Desktop → TREK 容器 :3000
+```
+
+### Docker 容器（本机 Mac）
 
 ```
 镜像: hankkyy/trek:latest
@@ -26,6 +51,20 @@
 端口: 3000:3000
 重启策略: unless-stopped
 ```
+
+### Cloudflare Tunnel
+
+Cloudflared 位于：`~/.hermes/profiles/backend-engineer/home/.local/bin/cloudflared`（版本 2026.6.1）
+
+**⚠️ 已知问题：Mac 关机则站点下线**
+
+TREK 运行在本机 Docker Desktop 上，依赖 Mac 保持开机。如果 Mac 休眠或关机，`hanktrip.com` 将不可访问。
+
+**建议升级方案**（按推荐度排序）：
+1. **Fly.io**（有免费额度）— 项目已在 trek-hanoi 中配过 fly.toml
+2. **Oracle Cloud 永久免费 ARM VPS**（4 核 24GB）— 完全免费
+3. **Railway / Render** — 简单部署，有免费层
+4. **树莓派** — 放家里 24h 运行，功耗极低
 
 ### 数据目录（绝对不能删除）
 
@@ -196,6 +235,22 @@ git merge upstream/main
 ---
 
 ## 故障排查
+
+### 站点无法访问
+```bash
+# 1. 检查 Docker 容器
+docker ps | grep trek          # 状态应为 "healthy"
+
+# 2. 检查本地是否可用
+curl -sI http://localhost:3000 # 应返回 200 OK
+
+# 3. 检查 Cloudflare Tunnel
+#    确认 cloudflared 进程在运行（可能通过 Hermes 管理）
+ps aux | grep cloudflared
+
+# 4. 检查外网可达性
+curl -sI https://hanktrip.com  # 应返回 200 OK
+```
 
 ### 容器启动失败
 ```bash
