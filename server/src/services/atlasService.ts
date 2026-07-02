@@ -421,11 +421,12 @@ export async function getStats(userId: number) {
   for (const place of places) {
     if (place.address) {
       const parts = place.address.split(',').map((s: string) => s.trim()).filter(Boolean);
-      // The last part is the country; the city is usually right before it, but a
-      // full formatted address can have a postal code sitting between them
-      // (e.g. "Bucharest, 010071, Romania"). Walk back from the country and take
-      // the first part that still has letters once digits/postal noise is stripped.
-      const candidates = parts.length >= 2 ? parts.slice(0, -1) : parts;
+      if (parts.length === 0) continue;
+      // Only drop the last part if it's a known country; otherwise treat it as
+      // part of the city-level address (handles domestic addresses like
+      // "1 Ho\u1ea3 L\u00f2, Ho\u00e0n Ki\u1ebfm, Hanoi" where Hanoi is the city, not a country).
+      const lastIsCountry = parts.length >= 2 && getCountryFromAddress(place.address) !== null;
+      const candidates = lastIsCountry ? parts.slice(0, -1) : parts;
       let city = '';
       for (let i = candidates.length - 1; i >= 0; i--) {
         const cleaned = candidates[i].replace(/[\d\-\u2212\u3012]+/g, '').trim();
