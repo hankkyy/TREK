@@ -343,7 +343,9 @@ export default function DefaultUserSettingsTab(): React.ReactElement {
             routeSegments: null,
             selectedPlaceId: null,
             onMarkerClick: null,
-            onMapClick: null,
+            onMapClick: (e: { latlng: { lat: number; lng: number } }) => {
+              setPreviewCenter([e.latlng.lat, e.latlng.lng])
+            },
             onMapContextMenu: null,
             center: previewCenter,
             zoom: previewZoom,
