@@ -358,6 +358,26 @@ export default function DefaultUserSettingsTab(): React.ReactElement {
             hasInspector: false,
           })}
         </div>
+        <div style={{ display: 'flex', gap: 8, marginTop: 8, alignItems: 'center' }}>
+          <span style={{ fontSize: 12, color: '#94a3b8', whiteSpace: 'nowrap' }}>当前预览中心:</span>
+          <input
+            type="number"
+            step="0.0001"
+            value={previewCenter[0]}
+            onChange={(e) => setPreviewCenter([parseFloat(e.target.value) || 0, previewCenter[1]])}
+            style={{ width: 80, padding: '2px 6px', fontSize: 11, border: '1px solid #d1d5db', borderRadius: 6 }}
+            title="纬度 Latitude"
+          />
+          <input
+            type="number"
+            step="0.0001"
+            value={previewCenter[1]}
+            onChange={(e) => setPreviewCenter([previewCenter[0], parseFloat(e.target.value) || 0])}
+            style={{ width: 80, padding: '2px 6px', fontSize: 11, border: '1px solid #d1d5db', borderRadius: 6 }}
+            title="经度 Longitude"
+          />
+          <span style={{ fontSize: 10, color: '#94a3b8' }}>拖拽地图或直接输入坐标</span>
+        </div>
       </div>
 
       {/* ── Map provider / instance-wide Mapbox ───────────────────────── */}
